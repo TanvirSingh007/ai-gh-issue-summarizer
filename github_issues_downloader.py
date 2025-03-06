@@ -25,6 +25,7 @@ query ($owner: String!, $name: String!, $cursor: String, $label: String!) {
         number
         title
         body
+        state
         createdAt
         closedAt
         url
@@ -79,8 +80,15 @@ def run_query(query, variables):
 def convert_to_markdown(issue):
     """Convert issue data to markdown format"""
     md = f"# Issue #{issue['number']}: {issue['title']}\n\n"
+    
+    # Add issue state prominently at the top
+    state = issue['state']
+    md += f"**State:** {state}\n"
     md += f"**Created by:** {issue['author']['login']} on {issue['createdAt']}\n"
-    md += f"**Closed on:** {issue['closedAt']}\n"
+    
+    if state == "CLOSED":
+        md += f"**Closed on:** {issue['closedAt']}\n"
+    
     md += f"**URL:** {issue['url']}\n\n"
     
     # Add labels

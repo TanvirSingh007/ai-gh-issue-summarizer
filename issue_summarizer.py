@@ -49,8 +49,9 @@ def generate_summary_with_llama(issue_data):
     issue_number = issue_data["number"]
     title = issue_data["title"]
     body = issue_data["body"]
+    state = issue_data["state"]
     created_at = format_date(issue_data["createdAt"])
-    closed_at = format_date(issue_data["closedAt"])
+    closed_at = format_date(issue_data["closedAt"]) if issue_data.get("closedAt") else "Not closed"
     url = issue_data["url"]
     
     # Extract comments (excluding bot comments)
@@ -69,6 +70,9 @@ def generate_summary_with_llama(issue_data):
 You are analyzing a GitHub issue. Please provide a detailed summary based on the following information:
 
 ISSUE TITLE: {title}
+ISSUE STATE: {state}
+ISSUE CREATED: {created_at}
+ISSUE CLOSED: {closed_at}
 
 ISSUE DESCRIPTION:
 {body}
@@ -84,6 +88,9 @@ Based on the above information, please provide:
 5. Whether it was a code change.
 6. If it was a code change, what changes were made and to what component.
 7. If it was not a code change, what steps were taken to fix the issue.
+
+Make sure to note that the issue state is {state}.
+Make sure to ignore any comments that are from bots or automations such as taro or github-actions.
 
 Format your response as a structured analysis, not as a list of answers to these questions.
 """
@@ -116,11 +123,12 @@ def process_issue(file_path):
         
         issue_number = issue_data["number"]
         title = issue_data["title"]
+        state = issue_data["state"]
         created_at = format_date(issue_data["createdAt"])
-        closed_at = format_date(issue_data["closedAt"])
+        closed_at = format_date(issue_data["closedAt"]) if issue_data.get("closedAt") else "Not closed"
         url = issue_data["url"]
         
-        print(f"Processing issue #{issue_number}: {title}")
+        print(f"Processing issue #{issue_number}: {title} (State: {state})")
         
         # Generate summary using Llama
         summary = generate_summary_with_llama(issue_data)
@@ -130,6 +138,7 @@ def process_issue(file_path):
 
 ## Issue Details
 - **Issue Number:** {issue_number}
+- **State:** {state}
 - **Opened:** {created_at}
 - **Closed:** {closed_at}
 - **GitHub Link:** [{url}]({url})
