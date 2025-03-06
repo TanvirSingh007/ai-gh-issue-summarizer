@@ -1,0 +1,24 @@
+# Environment variables
+.env
+
+# Python virtual environment
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Downloaded data
+downloaded_issues/
+issue_summaries/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db 
