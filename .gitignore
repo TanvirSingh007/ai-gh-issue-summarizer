@@ -12,6 +12,7 @@ __pycache__/
 # Downloaded data
 downloaded_issues/
 issue_summaries/
+summarizer_progress.json
 
 # IDE files
 .idea/
