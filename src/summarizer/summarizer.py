@@ -15,7 +15,7 @@ INPUT_DIR = "downloaded_issues/json"
 OUTPUT_DIR = "issue_summaries"
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 OLLAMA_API_BASE = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api").replace("/generate", "")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")  # Default model
 BATCH_SIZE = None  # Default to process all issues
 RESUME_FILE = "summarizer_progress.json"
 
@@ -207,12 +207,20 @@ def load_progress():
             return set(data.get("processed_files", []))
     return set()
 
-def main():
+def main(model=None):
+    global OLLAMA_MODEL
+    
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Process GitHub issues and generate summaries using Llama 3.2')
+    parser = argparse.ArgumentParser(description='Process GitHub issues and generate summaries using LLM')
+    parser.add_argument('--model', type=str, default=model or OLLAMA_MODEL, help=f'Ollama model to use (default: {OLLAMA_MODEL})')
     parser.add_argument('--batch', type=int, default=BATCH_SIZE, help='Number of issues to process in this batch (default: all issues)')
     parser.add_argument('--resume', action='store_true', help='Resume from where the script left off')
     args = parser.parse_args()
+    
+    # Update the model to use
+    if args.model:
+        OLLAMA_MODEL = args.model
+        print(f"Using model: {OLLAMA_MODEL}")
     
     setup_directories()
     print("Starting to process issues...")

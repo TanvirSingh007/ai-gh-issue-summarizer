@@ -11,12 +11,13 @@ REPO_OWNER = "trilogy-group"
 REPO_NAME = "eng-maintenance"
 LABEL = "Product:AdvocateHub"
 OUTPUT_DIR = "downloaded_issues"
+ISSUES_PER_PAGE = 100  # Maximum allowed by GitHub API
 
 # GraphQL query for fetching issues
 ISSUES_QUERY = """
-query ($owner: String!, $name: String!, $cursor: String, $label: String!) {
+query ($owner: String!, $name: String!, $cursor: String, $label: String!, $perPage: Int!) {
   repository(owner: $owner, name: $name) {
-    issues(first: 100, after: $cursor, labels: [$label], states: [CLOSED]) {
+    issues(first: $perPage, after: $cursor, labels: [$label], states: [CLOSED]) {
       pageInfo {
         hasNextPage
         endCursor
@@ -54,10 +55,17 @@ query ($owner: String!, $name: String!, $cursor: String, $label: String!) {
 
 def setup_directories():
     """Create necessary directories for output"""
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-        os.makedirs(os.path.join(OUTPUT_DIR, 'json'))
-        os.makedirs(os.path.join(OUTPUT_DIR, 'markdown'))
+    # Create main output directory
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Create subdirectories for JSON and Markdown files
+    json_dir = os.path.join(OUTPUT_DIR, 'json')
+    md_dir = os.path.join(OUTPUT_DIR, 'markdown')
+    
+    os.makedirs(json_dir, exist_ok=True)
+    os.makedirs(md_dir, exist_ok=True)
+    
+    print(f"Created directories:\n- {OUTPUT_DIR}\n- {json_dir}\n- {md_dir}")
 
 def run_query(query, variables):
     """Execute a GraphQL query"""
@@ -113,13 +121,31 @@ def fetch_all_issues():
     """Fetch all issues and save them in both JSON and Markdown formats"""
     cursor = None
     all_issues = []
+    page_count = 0
+    total_issues = 0
+    
+    print(f"\n{'='*80}")
+    print(f"📥 DOWNLOADING GITHUB ISSUES")
+    print(f"{'='*80}")
+    print(f"Repository: {REPO_OWNER}/{REPO_NAME}")
+    print(f"Label: {LABEL}")
+    print(f"Issues per page: {ISSUES_PER_PAGE}")
+    print(f"Output directory: {OUTPUT_DIR}")
+    print(f"{'='*80}\n")
+    
+    # Ensure directories exist
+    setup_directories()
     
     while True:
+        page_count += 1
+        print(f"Fetching page {page_count}...")
+        
         variables = {
             "owner": REPO_OWNER,
             "name": REPO_NAME,
             "cursor": cursor,
-            "label": LABEL
+            "label": LABEL,
+            "perPage": ISSUES_PER_PAGE
         }
         
         try:
@@ -130,10 +156,14 @@ def fetch_all_issues():
                 
             issues = result['data']['repository']['issues']
             current_batch = issues['nodes']
+            batch_size = len(current_batch)
             all_issues.extend(current_batch)
+            total_issues += batch_size
+            
+            print(f"Retrieved {batch_size} issues on page {page_count} (total: {total_issues})")
             
             # Save each issue individually
-            for issue in current_batch:
+            for i, issue in enumerate(current_batch, 1):
                 issue_number = issue['number']
                 
                 # Save JSON
@@ -146,37 +176,72 @@ def fetch_all_issues():
                 with open(md_path, 'w', encoding='utf-8') as f:
                     f.write(convert_to_markdown(issue))
                 
-                print(f"Saved issue #{issue_number}")
+                # Print progress every 10 issues or for the last one
+                if i % 10 == 0 or i == batch_size:
+                    print(f"Saved {i}/{batch_size} issues from page {page_count}")
             
+            # Check if we've reached the end of pagination
             if not issues['pageInfo']['hasNextPage']:
+                print(f"\nNo more pages to fetch. All issues downloaded.")
                 break
                 
             cursor = issues['pageInfo']['endCursor']
             
-            # Respect rate limits
-            time.sleep(1)
+            # Respect rate limits - pause between requests to avoid hitting GitHub's rate limit
+            print(f"Waiting 2 seconds before fetching next page...")
+            time.sleep(2)
             
         except Exception as e:
-            print(f"Error occurred: {str(e)}")
+            print(f"\n❌ Error occurred: {str(e)}")
+            print("Saving issues collected so far...")
             break
     
     # Save all issues in a single JSON file
-    with open(os.path.join(OUTPUT_DIR, 'all_issues.json'), 'w', encoding='utf-8') as f:
+    all_issues_path = os.path.join(OUTPUT_DIR, 'all_issues.json')
+    with open(all_issues_path, 'w', encoding='utf-8') as f:
         json.dump(all_issues, f, indent=2, ensure_ascii=False)
     
-    return len(all_issues)
+    print(f"\n{'='*80}")
+    print(f"✅ DOWNLOAD COMPLETE")
+    print(f"{'='*80}")
+    print(f"Total issues downloaded: {total_issues}")
+    print(f"Pages processed: {page_count}")
+    print(f"JSON files saved to: {os.path.join(OUTPUT_DIR, 'json')}")
+    print(f"Markdown files saved to: {os.path.join(OUTPUT_DIR, 'markdown')}")
+    print(f"All issues saved to: {all_issues_path}")
+    print(f"{'='*80}")
+    
+    return total_issues
 
-def main():
+def main(owner=None, repo=None, label=None, output_dir=None):
+    """Main function to run the GitHub issues downloader.
+    
+    Args:
+        owner (str, optional): GitHub repository owner. Defaults to None.
+        repo (str, optional): GitHub repository name. Defaults to None.
+        label (str, optional): Label to filter issues by. Defaults to None.
+        output_dir (str, optional): Directory to save downloaded issues. Defaults to None.
+    """
+    global REPO_OWNER, REPO_NAME, LABEL, OUTPUT_DIR
+    
+    # Override default values if provided
+    if owner:
+        REPO_OWNER = owner
+    if repo:
+        REPO_NAME = repo
+    if label:
+        LABEL = label
+    if output_dir:
+        OUTPUT_DIR = output_dir
+    
     if not GITHUB_TOKEN:
-        print("Error: GITHUB_TOKEN environment variable is not set")
-        return
+        print("\n❌ Error: GitHub token not found. Please set the GITHUB_TOKEN environment variable.")
+        print("You can create a token at https://github.com/settings/tokens")
+        return 0
     
-    setup_directories()
-    print("Starting to fetch issues...")
-    
+    # Setup directories is now called inside fetch_all_issues
     total_issues = fetch_all_issues()
-    print(f"\nCompleted! Downloaded {total_issues} issues.")
-    print(f"Files are saved in the '{OUTPUT_DIR}' directory")
+    return total_issues
 
 if __name__ == "__main__":
     main() 

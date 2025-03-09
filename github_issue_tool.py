@@ -44,19 +44,59 @@ def load_module(module_path, module_name):
 def download_command(args):
     """Run the GitHub issue downloader."""
     downloader = load_module(SRC_DIR / "downloader" / "downloader.py", "downloader")
-    # Update the output directory to use our data structure
-    downloader.OUTPUT_DIR = str(DATA_DIR / "downloaded_issues")
-    # Run the downloader
-    downloader.main()
+    
+    # Create the data directory if it doesn't exist
+    DATA_DIR.mkdir(exist_ok=True)
+    
+    # Set up the parameters for the downloader
+    owner = args.owner if hasattr(args, 'owner') and args.owner else downloader.REPO_OWNER
+    repo = args.repo if hasattr(args, 'repo') and args.repo else downloader.REPO_NAME
+    label = args.label if hasattr(args, 'label') and args.label else downloader.LABEL
+    output_dir = str(DATA_DIR / "downloaded_issues")
+    
+    print(f"\nDownloading GitHub issues from {owner}/{repo} with label '{label}'")
+    print(f"Output directory: {output_dir}\n")
+    
+    # Run the downloader with our parameters
+    issue_count = downloader.main(owner=owner, repo=repo, label=label, output_dir=output_dir)
+    
+    if issue_count > 0:
+        print(f"\nDownload completed successfully. You can now run the summarizer:")
+        print(f"  python github_issue_tool.py summarize")
+    else:
+        print(f"\nNo issues were downloaded. Please check your parameters and try again.")
 
 def summarize_command(args):
     """Run the issue summarizer."""
     summarizer = load_module(SRC_DIR / "summarizer" / "summarizer.py", "summarizer")
+    
+    # Create the data directories if they don't exist
+    DATA_DIR.mkdir(exist_ok=True)
+    (DATA_DIR / "issue_summaries").mkdir(exist_ok=True)
+    
     # Update the input and output directories to use our data structure
     summarizer.INPUT_DIR = str(DATA_DIR / "downloaded_issues" / "json")
     summarizer.OUTPUT_DIR = str(DATA_DIR / "issue_summaries")
+    
+    print(f"\nSummarizing issues using model: {args.model}")
+    print(f"Reading issues from: {summarizer.INPUT_DIR}")
+    print(f"Saving summaries to: {summarizer.OUTPUT_DIR}\n")
+    
+    # Create a custom argv for the summarizer script
+    sys.argv = [
+        "summarizer.py",
+        "--model", args.model
+    ]
+    
+    # Add optional arguments if provided
+    if hasattr(args, 'batch') and args.batch is not None:
+        sys.argv.extend(["--batch", str(args.batch)])
+    
+    if hasattr(args, 'resume') and args.resume:
+        sys.argv.append("--resume")
+    
     # Run the summarizer with command line arguments
-    summarizer.main()
+    summarizer.main(model=args.model)
 
 def embed_command(args):
     """Generate embeddings for issue summaries."""
@@ -114,7 +154,9 @@ def setup_parsers():
         epilog="""
 Examples:
   python github_issue_tool.py download
-  python github_issue_tool.py summarize
+  python github_issue_tool.py download --owner "owner" --repo "repo" --label "bug"
+  python github_issue_tool.py summarize --model llama3.2
+  python github_issue_tool.py summarize --model mistral --resume
   python github_issue_tool.py embed --model mistral
   python github_issue_tool.py analyze --model mistral
   python github_issue_tool.py analyze --model mistral --examples
@@ -125,9 +167,39 @@ Examples:
     
     # Download parser
     download_parser = subparsers.add_parser("download", help="Download GitHub issues")
+    download_parser.add_argument(
+        "--owner",
+        type=str,
+        help="GitHub repository owner (default: trilogy-group)"
+    )
+    download_parser.add_argument(
+        "--repo",
+        type=str,
+        help="GitHub repository name (default: eng-maintenance)"
+    )
+    download_parser.add_argument(
+        "--label",
+        type=str,
+        help="Label to filter issues by (default: Product:AdvocateHub)")
     
     # Summarize parser
     summarize_parser = subparsers.add_parser("summarize", help="Generate summaries for downloaded issues")
+    summarize_parser.add_argument(
+        "--model", 
+        type=str, 
+        default="llama3.2",
+        help="Ollama model to use for summarization (default: llama3.2)"
+    )
+    summarize_parser.add_argument(
+        "--batch", 
+        type=int, 
+        help="Number of issues to process in this batch (default: all issues)"
+    )
+    summarize_parser.add_argument(
+        "--resume", 
+        action="store_true", 
+        help="Resume from where the script left off"
+    )
     
     # Embed parser
     embed_parser = subparsers.add_parser("embed", help="Generate embeddings for issue summaries")
