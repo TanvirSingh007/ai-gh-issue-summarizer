@@ -15,7 +15,10 @@ issue_summaries/
 summarizer_progress.json
 
 # Vector database
-chroma_db/
+chroma_db
+
+# Data directory
+data
 
 # IDE files
 .idea/
