@@ -15,6 +15,8 @@ Commands:
     summarize   Generate summaries for downloaded issues
     embed       Generate embeddings for issue summaries
     analyze     Analyze issue summaries using LLM
+    metrics     Extract metrics from downloaded issues
+    visualize   Start a web server to visualize issue metrics
     
 Run 'python github_issue_tool.py [command] --help' for more information on a command.
 """
@@ -145,6 +147,58 @@ def analyze_command(args):
     # Run the analyzer
     analyzer.main()
 
+def metrics_command(args):
+    """Extract metrics from downloaded issues."""
+    metrics_extractor = load_module(SRC_DIR / "analyzer" / "metrics_extractor.py", "metrics_extractor")
+    
+    # Create the data directories if they don't exist
+    DATA_DIR.mkdir(exist_ok=True)
+    (DATA_DIR / "metrics").mkdir(exist_ok=True)
+    
+    # Set up the parameters for the metrics extractor
+    print(f"\nExtracting metrics using model: {args.model}")
+    
+    # Create a custom argv for the metrics extractor script
+    sys.argv = [
+        "metrics_extractor.py",
+        "--model", args.model
+    ]
+    
+    if args.skip_llm:
+        sys.argv.append("--skip-llm")
+    
+    # Add exclude users parameters
+    if args.include_all_users:
+        sys.argv.append("--include-all-users")
+    elif args.exclude_users:
+        sys.argv.append("--exclude-users")
+        for user in args.exclude_users:
+            sys.argv.append(user)
+    
+    # Run the metrics extractor
+    metrics_extractor.main(model=args.model)
+    
+    print(f"\nMetrics extraction completed. You can now visualize the metrics:")
+    print(f"  python github_issue_tool.py visualize")
+
+def visualize_command(args):
+    """Start a web server to visualize issue metrics."""
+    visualizer = load_module(SRC_DIR / "visualizer" / "app.py", "visualizer")
+    
+    # Set the port
+    port = args.port
+    
+    # Set the metrics file path
+    metrics_file = str(DATA_DIR / "metrics" / "github_issues_metrics.json")
+    
+    print(f"\nStarting visualization server on port {port}")
+    print(f"Using metrics from: {metrics_file}")
+    print(f"\nOpen your browser and navigate to: http://localhost:{port}")
+    print(f"Press Ctrl+C to stop the server\n")
+    
+    # Run the visualizer
+    visualizer.run_server(port=port, metrics_file=metrics_file)
+
 def setup_parsers():
     """Set up the command-line argument parsers."""
     # Main parser
@@ -236,6 +290,41 @@ Examples:
         help="Run example queries instead of interactive mode"
     )
     
+    # Metrics parser
+    metrics_parser = subparsers.add_parser("metrics", help="Extract metrics from downloaded issues")
+    metrics_parser.add_argument(
+        "--model", 
+        type=str, 
+        default="llama3.2",
+        help="Ollama model to use for metrics extraction (default: llama3.2)"
+    )
+    metrics_parser.add_argument(
+        "--skip-llm", 
+        action="store_true", 
+        help="Skip LLM-based analysis (faster)"
+    )
+    metrics_parser.add_argument(
+        "--exclude-users",
+        type=str,
+        nargs="*",
+        default=["spec-automation"],
+        help="List of usernames to exclude from analysis (default: spec-automation)"
+    )
+    metrics_parser.add_argument(
+        "--include-all-users",
+        action="store_true",
+        help="Include all users in analysis (overrides --exclude-users)"
+    )
+    
+    # Visualize parser
+    visualize_parser = subparsers.add_parser("visualize", help="Start a web server to visualize issue metrics")
+    visualize_parser.add_argument(
+        "--port", 
+        type=int, 
+        default=5000,
+        help="Port to run the visualization server on (default: 5000)"
+    )
+    
     return parser
 
 def main():
@@ -257,6 +346,10 @@ def main():
         embed_command(args)
     elif args.command == "analyze":
         analyze_command(args)
+    elif args.command == "metrics":
+        metrics_command(args)
+    elif args.command == "visualize":
+        visualize_command(args)
     else:
         parser.print_help()
 
