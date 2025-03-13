@@ -11,3 +11,5 @@ unstructured>=0.12.0
 pdf2image>=1.17.0
 pillow>=10.2.0
 tqdm>=4.66.0
+flask==2.3.3
+statistics>=1.0.3.5
